@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator Soal Assessment HOTS Madrasah (MI, MTs, MA)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2pdf.js for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Custom Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* Styling Khusus Cetak / Print PDF */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            body {
+                background-color: #ffffff !important;
+                color: #000000 !important;
+                font-size: 11pt;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+            .shadow-lg, .shadow-md, .shadow-sm {
+                box-shadow: none !important;
+            }
+            .border-custom {
+                border: 1px solid #000 !important;
+            }
+        }
+
+        .print-only {
+            display: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between" x-data="hotsApp()" x-init="initApp()">
+
+    <!-- HEADER / NAVIGATION (NO-PRINT) -->
+    <header class="bg-emerald-700 text-white shadow-lg no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-emerald-800 p-2 rounded-lg border border-emerald-500">
+                        <i class="fa-solid fa-file-pen text-2xl text-amber-400"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg leading-tight">HOTS Assessment Generator</h1>
+                        <p class="text-xs text-emerald-200">Modul Penyusunan Soal Madrasah (MI, MTs, MA)</p>
+                    </div>
+                </div>
+
+                <!-- Info Profile Top Right -->
+                <template x-if="teacher.name">
+                    <div class="flex items-center space-x-3 text-sm">
+                        <div class="hidden sm:block text-right">
+                            <span class="block font-semibold" x-text="teacher.name"></span>
+                            <span class="block text-xs text-emerald-200" x-text="teacher.subject + ' • ' + teacher.level"></span>
+                        </div>
+                        <button @click="showLoginModal = true" class="bg-emerald-800 hover:bg-emerald-900 px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-600 transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-user-gear"></i> Ubah Profil
+                        </button>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </header>
+
+    <!-- SUB NAVBAR TABS (NO-PRINT) -->
+    <nav class="bg-white border-b border-gray-200 shadow-sm no-print" x-show="teacher.name">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex space-x-4 overflow-x-auto py-2">
+                <button @click="activeTab = 'cp'" :class="activeTab === 'cp' ? 'bg-emerald-100 text-emerald-800 border-emerald-600 font-semibold' : 'text-gray-600 hover:bg-gray-100'" class="px-4 py-2 rounded-lg text-sm transition border flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-list-check text-emerald-600"></i> 1. Input CP & Indikator
+                </button>
+                <button @click="activeTab = 'kisikisi'" :class="activeTab === 'kisikisi' ? 'bg-emerald-100 text-emerald-800 border-emerald-600 font-semibold' : 'text-gray-600 hover:bg-gray-100'" class="px-4 py-2 rounded-lg text-sm transition border flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-table-cells text-emerald-600"></i> 2. Matrix Kisi-kisi Soal
+                </button>
+                <button @click="activeTab = 'soal'" :class="activeTab === 'soal' ? 'bg-emerald-100 text-emerald-800 border-emerald-600 font-semibold' : 'text-gray-600 hover:bg-gray-100'" class="px-4 py-2 rounded-lg text-sm transition border flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-file-lines text-emerald-600"></i> 3. Draft & Review Soal
+                    <span class="ml-1 px-2 py-0.5 text-xs bg-emerald-600 text-white rounded-full" x-text="items.length"></span>
+                </button>
+                <button @click="activeTab = 'preview'" :class="activeTab === 'preview' ? 'bg-emerald-100 text-emerald-800 border-emerald-600 font-semibold' : 'text-gray-600 hover:bg-gray-100'" class="px-4 py-2 rounded-lg text-sm transition border flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-print text-emerald-600"></i> 4. Preview & Export Document
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full">
+
+        <!-- ALERTS & STATUS NOTIFICATION -->
+        <div class="no-print mb-4" x-show="notification.show" x-transition>
+            <div :class="notification.type === 'success' ? 'bg-green-100 border-green-500 text-green-800' : 'bg-amber-100 border-amber-500 text-amber-800'" class="border-l-4 p-4 rounded shadow-sm flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <i :class="notification.type === 'success' ? 'fa-solid fa-circle-check text-green-600' : 'fa-solid fa-triangle-exclamation text-amber-600'"></i>
+                    <span x-text="notification.message" class="text-sm font-medium"></span>
+                </div>
+                <button @click="notification.show = false" class="text-gray-500 hover:text-gray-700">&times;</button>
+            </div>
+        </div>
+
+        <!-- ------------------------------------------------------------- -->
+        <!-- TAB 1: INPUT CP & INDIKATOR -->
+        <!-- ------------------------------------------------------------- -->
+        <div x-show="activeTab === 'cp' && teacher.name" class="no-print space-y-6" x-transition>
+            <!-- Card Form Tambah Items -->
+            <div class="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+                <div class="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 text-white flex justify-between items-center">
+                    <h2 class="font-bold text-lg flex items-center gap-2">
+                        <i class="fa-solid fa-plus-circle"></i> Tambah Capaian Pembelajaran (CP) & Indikator HOTS
+                    </h2>
+                    <span class="text-xs bg-white/20 px-2.5 py-1 rounded-full font-mono" x-text="teacher.level"></span>
+                </div>
+                
+                <form @submit.prevent="saveItem()" class="p-6 space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Elemen / Elemen CP -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Elemen / Lingkup Materi</label>
+                            <input type="text" x-model="formItem.elemen" placeholder="Contoh: Fikih Muamalah / Geometri / Al-Qur'an Hadis" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" required>
+                        </div>
+
+                        <!-- Capaian Pembelajaran (CP) -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Capaian Pembelajaran (CP)</label>
+                            <input type="text" x-model="formItem.cp" placeholder="Masukkan ringkasan CP..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Materi Pokok -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Materi Spesifik</label>
+                            <input type="text" x-model="formItem.materi" placeholder="Topik spesifik bahasan" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" required>
+                        </div>
+
+                        <!-- Level Kognitif HOTS -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Level Kognitif (HOTS)</label>
+                            <select x-model="formItem.cognitiveLevel" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white" required>
+                                <option value="C4 - Menganalisis">C4 - Menganalisis (Analysis)</option>
+                                <option value="C5 - Mengevaluasi">C5 - Mengevaluasi (Evaluation)</option>
+                                <option value="C6 - Menciptakan">C6 - Menciptakan (Creating)</option>
+                            </select>
+                        </div>
+
+                        <!-- Bentuk Soal -->
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-700 mb-1">Bentuk Soal</label>
+                            <select x-model="formItem.questionType" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white" required>
+                                <option value="Pilihan Ganda">Pilihan Ganda (PG)</option>
+                                <option value="PG Kompleks">PG Kompleks (Jawaban > 1)</option>
+                                <option value="Menjodohkan">Menjodohkan</option>
+                                <option value="Isian Singkat">Isian Singkat</option>
+                                <option value="Uraian/Essay">Uraian / Essay</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Indikator Soal -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-xs font-semibold text-gray-700">Indikator Soal (HOTS Constraint)</label>
+                            <button type="button" @click="generateHotsTemplate()" class="text-xs text-emerald-700 hover:underline flex items-center gap-1 font-medium">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Gunakan Formula Kata Kerja Operasional HOTS
+                            </button>
+                        </div>
+                        <textarea x-model="formItem.indikator" rows="2" placeholder="Disajikan stimulus berupa data/tabel/narasi kasus, peserta didik dapat menganalisis..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" required></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-3 pt-2">
+                        <button type="button" @click="resetFormItem()" class="px-4 py-2 border rounded-lg text-gray-600 hover:bg-gray-100 text-sm font-medium">
+                            Reset Form
+                        </button>
+                        <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow flex items-center gap-2">
+                            <i class="fa-solid fa-save"></i> <span x-text="isEditing ? 'Perbarui Data Soal' : 'Simpan Ke Matrix & Draft'"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tabel Daftar CP & Indikator -->
+            <div class="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 bg-gray-50 border-b flex justify-between items-center">
+                    <h3 class="font-bold text-gray-800">Daftar CP & Indikator Terdaftar (<span x-text="items.length"></span>)</h3>
+                    <button @click="loadSampleData()" class="text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-md font-semibold border border-amber-300 transition">
+                        <i class="fa-solid fa-lightbulb"></i> Muat Contoh Data HOTS (<span x-text="teacher.level"></span>)
+                    </button>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 font-semibold border-b">
+                                <th class="p-3 w-12 text-center">No</th>
+                                <th class="p-3">Elemen & Materi</th>
+                                <th class="p-3">Indikator Soal</th>
+                                <th class="p-3 w-32">Level Kognitif</th>
+                                <th class="p-3 w-32">Bentuk Soal</th>
+                                <th class="p-3 w-28 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            <template x-for="(item, index) in items" :key="item.id">
+                                <tr class="hover:bg-gray-50 transition">
+                                    <td class="p-3 text-center font-bold text-gray-600" x-text="index + 1"></td>
+                                    <td class="p-3">
+                                        <div class="font-bold text-emerald-800" x-text="item.elemen"></div>
+                                        <div class="text-xs text-gray-600" x-text="'Materi: ' + item.materi"></div>
+                                    </td>
+                                    <td class="p-3 text-gray-700" x-text="item.indikator"></td>
+                                    <td class="p-3">
+                                        <span class="inline-block px-2.5 py-1 text-xs rounded-full font-medium" 
+                                              :class="{
+                                                'bg-purple-100 text-purple-800': item.cognitiveLevel.includes('C4'),
+                                                'bg-blue-100 text-blue-800': item.cognitiveLevel.includes('C5'),
+                                                'bg-rose-100 text-rose-800': item.cognitiveLevel.includes('C6')
+                                              }" x-text="item.cognitiveLevel">
+                                        </span>
+                                    </td>
+                                    <td class="p-3 text-xs font-medium text-gray-600" x-text="item.questionType"></td>
+                                    <td class="p-3 text-center">
+                                        <div class="flex justify-center space-x-2">
+                                            <button @click="editItem(item)" class="text-blue-600 hover:text-blue-800 p-1.5 rounded hover:bg-blue-50" title="Edit">
+                                                <i class="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                            <button @click="deleteItem(item.id)" class="text-red-600 hover:text-red-800 p-1.5 rounded hover:bg-red-50" title="Hapus">
+                                                <i class="fa-solid fa-trash-can"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                            <template x-if="items.length === 0">
+                                <tr>
+                                    <td colspan="6" class="p-8 text-center text-gray-500 italic">
+                                        Belum ada data CP & Indikator. Silakan isi form di atas atau klik "Muat Contoh Data HOTS".
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ------------------------------------------------------------- -->
+        <!-- TAB 2: KISI-KISI MATRIKS -->
+        <!-- ------------------------------------------------------------- -->
+        <div x-show="activeTab === 'kisikisi' && teacher.name" class="no-print space-y-6" x-transition>
+            <div class="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b gap-4">
+                    <div>
+                        <h2 class="font-bold text-xl text-gray-800 flex items-center gap-2">
+                            <i class="fa-solid fa-table-cells text-emerald-600"></i> Matriks Kisi-kisi Soal HOTS
+                        </h2>
+                        <p class="text-xs text-gray-500">Tampilan matriks yang siap diverifikasi untuk pembuatan instrumen asesmen.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="activeTab = 'soal'" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 transition flex items-center gap-2">
+                            Lanjut ke Draft Soal <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Info Header Matriks -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-emerald-50 rounded-lg text-xs mb-6 border border-emerald-100">
+                    <div><span class="text-gray-500">Mata Pelajaran:</span> <strong class="block font-semibold text-emerald-900" x-text="teacher.subject"></strong></div>
+                    <div><span class="text-gray-500">Tingkat / Kelas:</span> <strong class="block font-semibold text-emerald-900" x-text="teacher.level + ' / ' + teacher.grade"></strong></div>
+                    <div><span class="text-gray-500">Penyusun:</span> <strong class="block font-semibold text-emerald-900" x-text="teacher.name"></strong></div>
+                    <div><span class="text-gray-500">Tahun Ajaran:</span> <strong class="block font-semibold text-emerald-900" x-text="teacher.academicYear"></strong></div>
+                </div>
+
+                <!-- Matrix Table View -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse border border-gray-300 text-xs">
+                        <thead>
+                            <tr class="bg-emerald-700 text-white font-semibold">
+                                <th class="border border-gray-300 p-2 text-center w-10">No</th>
+                                <th class="border border-gray-300 p-2">Capaian Pembelajaran (CP)</th>
+                                <th class="border border-gray-300 p-2">Materi Pokok</th>
+                                <th class="border border-gray-300 p-2">Indikator Soal (HOTS)</th>
+                                <th class="border border-gray-300 p-2 text-center w-24">Level Kognitif</th>
+                                <th class="border border-gray-300 p-2 text-center w-24">Bentuk Soal</th>
+                                <th class="border border-gray-300 p-2 text-center w-16">No. Soal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(item, index) in items" :key="item.id">
+                                <tr class="hover:bg-gray-50">
+                                    <td class="border border-gray-300 p-2 text-center font-bold" x-text="index + 1"></td>
+                                    <td class="border border-gray-300 p-2" x-text="item.cp"></td>
+                                    <td class="border border-gray-300 p-2 font-medium" x-text="item.materi"></td>
+                                    <td class="border border-gray-300 p-2" x-text="item.indikator"></td>
+                                    <td class="border border-gray-300 p-2 text-center font-bold text-emerald-800" x-text="item.cognitiveLevel"></td>
+                                    <td class="border border-gray-300 p-2 text-center" x-text="item.questionType"></td>
+                                    <td class="border border-gray-300 p-2 text-center font-bold" x-text="index + 1"></td>
+                                </tr>
+                            </template>
+                            <template x-if="items.length === 0">
+                                <tr>
+                                    <td colspan="7" class="border border-gray-300 p-6 text-center text-gray-500 italic">
+                                        Data Kisi-kisi belum tersedia.
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ------------------------------------------------------------- -->
+        <!-- TAB 3: DRAFT & REVIEW SOAL GURU BIDANG STUDI -->
+        <!-- ------------------------------------------------------------- -->
+        <div x-show="activeTab === 'soal' && teacher.name" class="no-print space-y-6" x-transition>
+            <div class="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b gap-4">
+                    <div>
+                        <h2 class="font-bold text-xl text-gray-800 flex items-center gap-2">
+                            <i class="fa-solid fa-file-pen text-emerald-600"></i> Draft & Modul Review Soal
+                        </h2>
+                        <p class="text-xs text-gray-500">Lengkapi naskah soal, stimulus HOTS, kunci jawaban, serta catatan verifikasi Guru Penilai/Validator.</p>
+                    </div>
+                </div>
+
+                <!-- List Draft Soal Items -->
+                <div class="space-y-6">
+                    <template x-for="(item, index) in items" :key="item.id">
+                        <div class="border rounded-xl p-5 bg-white shadow-sm border-gray-300 space-y-4 relative">
+                            <!-- Top Header Item -->
+                            <div class="flex flex-wrap justify-between items-center bg-gray-50 p-3 rounded-lg border gap-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-emerald-700 text-white font-bold px-3 py-1 rounded-md text-xs" x-text="'Soal No. ' + (index + 1)"></span>
+                                    <span class="text-xs font-semibold px-2.5 py-1 bg-purple-100 text-purple-800 rounded-full" x-text="item.cognitiveLevel"></span>
+                                    <span class="text-xs font-semibold px-2.5 py-1 bg-gray-200 text-gray-800 rounded-full" x-text="item.questionType"></span>
+                                </div>
+
+                                <!-- Review Status Badge -->
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-semibold">Status Review:</span>
+                                    <select x-model="item.status" class="text-xs font-bold px-2 py-1 rounded border focus:outline-none"
+                                            :class="{
+                                                'bg-yellow-100 text-yellow-800 border-yellow-300': item.status === 'Draft',
+                                                'bg-green-100 text-green-800 border-green-300': item.status === 'Disetujui',
+                                                'bg-red-100 text-red-800 border-red-300': item.status === 'Revisi'
+                                            }">
+                                        <option value="Draft">🟡 Draft (Belum Diperiksa)</option>
+                                        <option value="Disetujui">🟢 Disetujui (Valid)</option>
+                                        <option value="Revisi">🔴 Perlu Revisi</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Indikator Reference -->
+                            <div class="text-xs text-gray-600 bg-emerald-50/50 p-2.5 rounded border border-emerald-100">
+                                <strong>Indikator Target:</strong> <span x-text="item.indikator"></span>
+                            </div>
+
+                            <!-- Editor Stimulus & Pertanyaan -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Stimulus HOTS -->
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Stimulus HOTS (Narasi / Wacana / Grafik / Kasus)</label>
+                                    <textarea x-model="item.stimulus" rows="4" placeholder="Tuliskan stimulus konteks nyata/studi kasus di sini..." class="w-full px-3 py-2 border rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+                                </div>
+
+                                <!-- Narasi Soal / Pertanyaan -->
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Naskah Pertanyaan (Butir Soal)</label>
+                                    <textarea x-model="item.questionText" rows="4" placeholder="Tuliskan rumusan pertanyaan HOTS..." class="w-full px-3 py-2 border rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"></textarea>
+                                </div>
+                            </div>
+
+                            <!-- Pilihan Jawaban (Jika Pilihan Ganda) -->
+                            <template x-if="item.questionType === 'Pilihan Ganda'">
+                                <div class="bg-gray-50 p-3 rounded-lg border space-y-2">
+                                    <label class="block text-xs font-bold text-gray-700">Pilihan Jawaban (Opsi A - E)</label>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs font-bold text-gray-600">A.</span>
+                                            <input type="text" x-model="item.optionA" placeholder="Opsi A" class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs font-bold text-gray-600">B.</span>
+                                            <input type="text" x-model="item.optionB" placeholder="Opsi B" class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs font-bold text-gray-600">C.</span>
+                                            <input type="text" x-model="item.optionC" placeholder="Opsi C" class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs font-bold text-gray-600">D.</span>
+                                            <input type="text" x-model="item.optionD" placeholder="Opsi D" class="w-full px-2 py-1 text-xs border rounded">
+                                        </div>
+                                        <template x-if="teacher.level === 'MA'">
+                                            <div class="flex items-center gap-2 sm:col-span-2">
+                                                <span class="text-xs font-bold text-gray-600">E.</span>
+                                                <input type="text" x-model="item.optionE" placeholder="Opsi E (Khusus MA)" class="w-full px-2 py-1 text-xs border rounded">
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Kunci Jawaban & Rubrik Pembahasan -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-amber-50/50 p-3 rounded-lg border border-amber-200">
+                                <div>
+                                    <label class="block text-xs font-bold text-amber-900 mb-1">Kunci Jawaban</label>
+                                    <input type="text" x-model="item.answerKey" placeholder="Contoh: A / Kunci Singkat" class="w-full px-3 py-1.5 border rounded text-xs bg-white">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-xs font-bold text-amber-900 mb-1">Rubrik Pembahasan / Pedoman Penskoran</label>
+                                    <input type="text" x-model="item.rubric" placeholder="Penjelasan rasionalitas jawaban HOTS..." class="w-full px-3 py-1.5 border rounded text-xs bg-white">
+                                </div>
+                            </div>
+
+                            <!-- Catatan Validator / Reviewer Guru Bidang Studi -->
+                            <div class="bg-blue-50/50 p-3 rounded-lg border border-blue-200">
+                                <label class="block text-xs font-bold text-blue-900 mb-1">
+                                    <i class="fa-solid fa-user-check"></i> Catatan Penilai / Validator (<span x-text="teacher.reviewer || 'Guru Serumpun'"></span>)
+                                </label>
+                                <input type="text" x-model="item.reviewerNotes" placeholder="Masukkan catatan atau perbaikan konstruksi soal..." class="w-full px-3 py-1.5 border rounded text-xs bg-white">
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button @click="saveToLocalStorage(); showNotification('Seluruh draft naskah soal berhasil disimpan!')" class="bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow flex items-center gap-2">
+                        <i class="fa-solid fa-floppy-disk"></i> Simpan Seluruh Draft Soal
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ------------------------------------------------------------- -->
+        <!-- TAB 4: PREVIEW & EXPORT DOCUMENT (PRINT & PDF) -->
+        <!-- ------------------------------------------------------------- -->
+        <div x-show="activeTab === 'preview' && teacher.name" class="space-y-6" x-transition>
+            <!-- Control Toolbar (No Print) -->
+            <div class="no-print bg-white p-4 rounded-xl shadow border flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <h3 class="font-bold text-gray-800 text-sm">Siap Cetak atau Download PDF</h3>
+                    <p class="text-xs text-gray-500">Pilih opsi format di bawah untuk mengunduh naskah resmi.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button @click="window.print()" class="bg-gray-800 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-gray-900 transition flex items-center gap-2">
+                        <i class="fa-solid fa-print"></i> Cetak Dokumen (Print-out)
+                    </button>
+                    <button @click="downloadPDF()" class="bg-rose-600 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-rose-700 transition flex items-center gap-2">
+                        <i class="fa-solid fa-file-pdf"></i> Download File PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- DOCUMENT AREA TO BE PRINTED / EXPORTED -->
+            <div id="document-render" class="bg-white p-8 rounded-xl shadow-lg border border-gray-300 max-w-4xl mx-auto text-black">
+                
+                <!-- KOP MADRASAH STANDARD -->
+                <div class="text-center border-b-4 border-double border-black pb-4 mb-6">
+                    <h3 class="text-sm font-bold tracking-wider uppercase" x-text="'KEMENTERIAN AGAMA REPUBLIK INDONESIA'"></h3>
+                    <h2 class="text-lg font-extrabold uppercase tracking-wide" x-text="teacher.schoolName || ('MADRASAH ' + teacher.level + ' NEGERI / SWASTA')"></h2>
+                    <p class="text-xs italic" x-text="teacher.schoolAddress || 'Jl. Pendidikan Agama No. 10, Kabupaten/Kota, Indonesia'"></p>
+                    <div class="mt-2 font-bold text-sm underline uppercase">
+                        NASKAH ASESMEN PEMBELAJARAN (SOAL HOTS) - TAHUN AJARAN <span x-text="teacher.academicYear"></span>
+                    </div>
+                </div>
+
+                <!-- METADATA HEADER -->
+                <div class="grid grid-cols-2 text-xs mb-6 border p-3 rounded space-y-1">
+                    <div>
+                        <p><strong>Mata Pelajaran:</strong> <span x-text="teacher.subject"></span></p>
+                        <p><strong>Satuan Pendidikan:</strong> <span x-text="teacher.level"></span></p>
+                        <p><strong>Kelas / Semester:</strong> <span x-text="teacher.grade + ' / ' + teacher.semester"></span></p>
+                    </div>
+                    <div>
+                        <p><strong>Guru Pengampu:</strong> <span x-text="teacher.name"></span></p>
+                        <p><strong>Guru Validator:</strong> <span x-text="teacher.reviewer"></span></p>
+                        <p><strong>Waktu Pengerjaan:</strong> 90 Menit</p>
+                    </div>
+                </div>
+
+                <!-- SECTION 1: MATRIKS KISI-KISI -->
+                <div class="mb-8">
+                    <h4 class="font-bold text-xs uppercase mb-2 border-b pb-1">I. KISI-KISI PENULISAN SOAL HOTS</h4>
+                    <table class="w-full text-left border-collapse border border-black text-xs">
+                        <thead>
+                            <tr class="bg-gray-100 font-bold">
+                                <th class="border border-black p-1.5 text-center w-8">No</th>
+                                <th class="border border-black p-1.5">Elemen / CP</th>
+                                <th class="border border-black p-1.5">Materi</th>
+                                <th class="border border-black p-1.5">Indikator Soal</th>
+                                <th class="border border-black p-1.5 text-center w-16">Cognitive</th>
+                                <th class="border border-black p-1.5 text-center w-20">Bentuk</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(item, index) in items" :key="'preview-kisi-'+item.id">
+                                <tr>
+                                    <td class="border border-black p-1.5 text-center" x-text="index + 1"></td>
+                                    <td class="border border-black p-1.5" x-text="item.cp"></td>
+                                    <td class="border border-black p-1.5" x-text="item.materi"></td>
+                                    <td class="border border-black p-1.5" x-text="item.indikator"></td>
+                                    <td class="border border-black p-1.5 text-center font-bold" x-text="item.cognitiveLevel.split(' - ')[0]"></td>
+                                    <td class="border border-black p-1.5 text-center" x-text="item.questionType"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- SECTION 2: LEMBAR NASKAH SOAL -->
+                <div class="page-break">
+                    <h4 class="font-bold text-xs uppercase mb-3 border-b pb-1">II. LEMBAR SOAL ASESMEN</h4>
+                    
+                    <div class="space-y-6">
+                        <template x-for="(item, index) in items" :key="'preview-soal-'+item.id">
+                            <div class="text-xs space-y-2">
+                                <div class="font-bold flex justify-between">
+                                    <span x-text="(index + 1) + '. (' + item.questionType + ' - ' + item.cognitiveLevel + ')'"></span>
+                                    <span class="text-gray-500 italic" x-text="'[Status: ' + item.status + ']'"></span>
+                                </div>
+
+                                <!-- Box Stimulus jika ada -->
+                                <template x-if="item.stimulus">
+                                    <div class="border border-gray-400 bg-gray-50 p-2.5 rounded italic text-gray-800 leading-relaxed" x-text="item.stimulus"></div>
+                                </template>
+
+                                <!-- Pertanyaan -->
+                                <div class="font-medium text-black leading-relaxed" x-text="item.questionText"></div>
+
+                                <!-- Opsi Jawaban Pilihan Ganda -->
+                                <template x-if="item.questionType === 'Pilihan Ganda'">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 pl-4 pt-1">
+                                        <div>A. <span x-text="item.optionA"></span></div>
+                                        <div>B. <span x-text="item.optionB"></span></div>
+                                        <div>C. <span x-text="item.optionC"></span></div>
+                                        <div>D. <span x-text="item.optionD"></span></div>
+                                        <template x-if="teacher.level === 'MA' && item.optionE">
+                                            <div>E. <span x-text="item.optionE"></span></div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- LEMBAR VERIFIKASI & TANDA TANGAN -->
+                <div class="mt-12 text-xs grid grid-cols-2 gap-8 pt-6 border-t border-gray-300">
+                    <div class="text-center space-y-12">
+                        <div>
+                            <p>Mengetahui,</p>
+                            <p class="font-bold">Guru Validator / Penilai</p>
+                        </div>
+                        <div>
+                            <p class="font-bold underline" x-text="teacher.reviewer || '( ........................................ )'"></p>
+                            <p x-text="'NIP. ' + (teacher.reviewerNip || '........................................')"></p>
+                        </div>
+                    </div>
+
+                    <div class="text-center space-y-12">
+                        <div>
+                            <p x-text="'Kota/Kab, ' + new Date().toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})"></p>
+                            <p class="font-bold">Guru Mata Pelajaran</p>
+                        </div>
+                        <div>
+                            <p class="font-bold underline" x-text="teacher.name || '( ........................................ )'"></p>
+                            <p x-text="'NIP. ' + (teacher.nip || '........................................')"></p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ------------------------------------------------------------- -->
+    <!-- MODAL INITIAL LOGIN & PROFIL GURU (GATEWAY) -->
+    <!-- ------------------------------------------------------------- -->
+    <div x-show="showLoginModal || !teacher.name" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print" x-transition>
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100">
+            <div class="bg-emerald-700 p-6 text-white text-center relative">
+                <div class="inline-flex p-3 bg-emerald-800 rounded-xl mb-2 border border-emerald-500 shadow-inner">
+                    <i class="fa-solid fa-graduation-cap text-3xl text-amber-400"></i>
+                </div>
+                <h3 class="text-xl font-bold">Profil Guru & Asesmen</h3>
+                <p class="text-xs text-emerald-200 mt-1">Lengkapi data untuk memulai penyusunan soal HOTS</p>
+            </div>
+
+            <form @submit.prevent="saveTeacherProfile()" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">Nama Guru Mata Pelajaran</label>
+                    <input type="text" x-model="tempTeacher.name" placeholder="Nama Lengkap & Gelar" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" required>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">NIP (Optional)</label>
+                        <input type="text" x-model="tempTeacher.nip" placeholder="198XXXXX..." class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Mata Pelajaran</label>
+                        <input type="text" x-model="tempTeacher.subject" placeholder="Contoh: Akidah Akhlak" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" required>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Tingkat Madrasah</label>
+                        <select x-model="tempTeacher.level" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white" required>
+                            <option value="MI">MI (Madrasah Ibtidaiyah)</option>
+                            <option value="MTs">MTs (Madrasah Tsanawiyah)</option>
+                            <option value="MA">MA (Madrasah Aliyah)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Kelas</label>
+                        <input type="text" x-model="tempTeacher.grade" placeholder="Contoh: IV / VIII / XI" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">Nama Guru Validator / Reviewer</label>
+                    <input type="text" x-model="tempTeacher.reviewer" placeholder="Nama Guru Serumpun / Penilai" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-lg shadow-md transition flex justify-center items-center gap-2">
+                        <i class="fa-solid fa-right-to-bracket"></i> Masuk & Mulai Menyusun
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- FOOTER RESMI (REQUIRED CREDIT) -->
+    <footer class="bg-gray-900 text-gray-400 py-4 px-4 text-center text-xs border-t border-gray-800 no-print">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>
+                <span>Aplikasi Penyusunan Assessment HOTS Madrasah</span>
+            </div>
+            <div class="font-semibold text-emerald-400">
+                Dikembangkan oleh (c) D.E.A 2026
+            </div>
+        </div>
+    </footer>
+
+    <!-- ALPINE JS LOGIC APPLICATION -->
+    <script>
+        function hotsApp() {
+            return {
+                showLoginModal: false,
+                activeTab: 'cp',
+                notification: { show: false, message: '', type: 'success' },
+                isEditing: false,
+                editingId: null,
+
+                // Profile Teacher State
+                teacher: {
+                    name: '',
+                    nip: '',
+                    subject: '',
+                    level: 'MTs',
+                    grade: 'VIII',
+                    semester: 'Ganjil',
+                    academicYear: '2025/2026',
+                    schoolName: '',
+                    schoolAddress: '',
+                    reviewer: '',
+                    reviewerNip: ''
+                },
+
+                tempTeacher: {},
+
+                // Items Soal (CP, Indikator, Draft Soal, Status)
+                items: [],
+
+                // Form Item Binding
+                formItem: {
+                    elemen: '',
+                    cp: '',
+                    materi: '',
+                    indikator: '',
+                    cognitiveLevel: 'C4 - Menganalisis',
+                    questionType: 'Pilihan Ganda',
+                    stimulus: '',
+                    questionText: '',
+                    optionA: '',
+                    optionB: '',
+                    optionC: '',
+                    optionD: '',
+                    optionE: '',
+                    answerKey: '',
+                    rubric: '',
+                    status: 'Draft',
+                    reviewerNotes: ''
+                },
+
+                initApp() {
+                    // Load Saved Data from LocalStorage
+                    const savedTeacher = localStorage.getItem('dea_hots_teacher');
+                    const savedItems = localStorage.getItem('dea_hots_items');
+
+                    if (savedTeacher) {
+                        this.teacher = JSON.parse(savedTeacher);
+                        this.tempTeacher = { ...this.teacher };
+                    } else {
+                        this.showLoginModal = true;
+                        this.tempTeacher = { ...this.teacher };
+                    }
+
+                    if (savedItems) {
+                        this.items = JSON.parse(savedItems);
+                    }
+                },
+
+                saveTeacherProfile() {
+                    this.teacher = { ...this.tempTeacher };
+                    localStorage.setItem('dea_hots_teacher', JSON.stringify(this.teacher));
+                    this.showLoginModal = false;
+                    this.showNotification('Profil Guru berhasil diperbarui!');
+                },
+
+                saveItem() {
+                    if (this.isEditing) {
+                        const index = this.items.findIndex(i => i.id === this.editingId);
+                        if (index !== -1) {
+                            this.items[index] = { ...this.formItem, id: this.editingId };
+                        }
+                        this.isEditing = false;
+                        this.editingId = null;
+                        this.showNotification('Data CP & Indikator berhasil diperbarui.');
+                    } else {
+                        const newItem = {
+                            ...this.formItem,
+                            id: Date.now(),
+                            status: 'Draft'
+                        };
+                        this.items.push(newItem);
+                        this.showNotification('Data CP & Indikator baru berhasil ditambahkan.');
+                    }
+
+                    this.saveToLocalStorage();
+                    this.resetFormItem();
+                },
+
+                editItem(item) {
+                    this.formItem = { ...item };
+                    this.isEditing = true;
+                    this.editingId = item.id;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                },
+
+                deleteItem(id) {
+                    if (confirm('Apakah Anda yakin ingin menghapus data soal ini?')) {
+                        this.items = this.items.filter(i => i.id !== id);
+                        this.saveToLocalStorage();
+                        this.showNotification('Soal berhasil dihapus.', 'warning');
+                    }
+                },
+
+                resetFormItem() {
+                    this.formItem = {
+                        elemen: '',
+                        cp: '',
+                        materi: '',
+                        indikator: '',
+                        cognitiveLevel: 'C4 - Menganalisis',
+                        questionType: 'Pilihan Ganda',
+                        stimulus: '',
+                        questionText: '',
+                        optionA: '',
+                        optionB: '',
+                        optionC: '',
+                        optionD: '',
+                        optionE: '',
+                        answerKey: '',
+                        rubric: '',
+                        status: 'Draft',
+                        reviewerNotes: ''
+                    };
+                    this.isEditing = false;
+                    this.editingId = null;
+                },
+
+                saveToLocalStorage() {
+                    localStorage.setItem('dea_hots_items', JSON.stringify(this.items));
+                },
+
+                showNotification(msg, type = 'success') {
+                    this.notification = { show: true, message: msg, type: type };
+                    setTimeout(() => { this.notification.show = false; }, 3500);
+                },
+
+                generateHotsTemplate() {
+                    const templates = [
+                        "Disajikan studi kasus/wacana konteks sosial, peserta didik dapat mengevaluasi efektivitas solusi yang ditawarkan.",
+                        "Disajikan data statistik/tabel fenomena alam, peserta didik dapat menganalisis hubungan sebab-akibat dengan kritis.",
+                        "Disajikan narasi konflik fikih muamalah kontemporer, peserta didik dapat mengonstruksi hukum dan argumen pendukungnya."
+                    ];
+                    this.formItem.indikator = templates[Math.floor(Math.random() * templates.length)];
+                },
+
+                loadSampleData() {
+                    const level = this.teacher.level || 'MTs';
+                    let samples = [];
+
+                    if (level === 'MI') {
+                        samples = [
+                            {
+                                id: 101,
+                                elemen: 'IPAS / Sains',
+                                cp: 'Menganalisis hubungan antara bentuk dan fungsi bagian tubuh pada tumbuhan',
+                                materi: 'Fotosintesis & Lingkungan',
+                                indikator: 'Disajikan gambar eksperimen tumbuhan yang ditutup plastik hitam, siswa dapat menganalisis dampak ketiadaan cahaya matahari.',
+                                cognitiveLevel: 'C4 - Menganalisis',
+                                questionType: 'Pilihan Ganda',
+                                stimulus: 'Ahmad melakukan percobaan dengan menutup salah satu daun tanaman menggunakan kertas aluminium selama 3 hari di bawah sinar matahari.',
+                                questionText: 'Mengapa daun yang ditutup aluminium foil tidak menghasilkan pati saat ditetesi larutan iodin?',
+                                optionA: 'Daun tidak mendapatkan air dari batang',
+                                optionB: 'Cahaya matahari terhalang sehingga fotosintesis tidak terjadi',
+                                optionC: 'Aluminium foil merusak sel-sel permukaan daun',
+                                optionD: 'Klorofil hilang akibat penguapan yang berlebihan',
+                                answerKey: 'B',
+                                rubric: 'Penjelasan korelasi cahaya matahari dengan proses pembentukan glukosa/pati.',
+                                status: 'Disetujui',
+                                reviewerNotes: 'Sangat baik untuk tingkat MI.'
+                            }
+                        ];
+                    } else if (level === 'MA') {
+                        samples = [
+                            {
+                                id: 102,
+                                elemen: 'Fikih / Ekonomi Islam',
+                                cp: 'Menganalisis prinsip dan akad Fikih Muamalah Kontemporer',
+                                materi: 'PayLater & Financial Technology',
+                                indikator: 'Disajikan narasi skenario transaksi e-commerce PayLater, siswa dapat mengevaluasi keabsahan akad berdasarkan kaidah fiqih.',
+                                cognitiveLevel: 'C5 - Mengevaluasi',
+                                questionType: 'Pilihan Ganda',
+                                stimulus: 'Aisyah menggunakan layanan FinTech PayLater untuk membeli laptop sekolah dengan bunga 2.5% jika dicicil selama 6 bulan.',
+                                questionText: 'Berdasarkan Fatwa DSN-MUI tentang Fintech, bagaimana status hukum penambahan biaya cicilan tersebut?',
+                                optionA: 'Sah karena didasari atas kerelaan kedua pihak (An-Taradin)',
+                                optionB: 'Haram karena mengandung unsur Riba An-Nasi\'ah',
+                                optionC: 'Subhat karena belum ada kejelasan akad barang',
+                                optionD: 'Makruh karena membebani pembeli',
+                                optionE: 'Mubah karena termasuk akad Ijarah jasa aplikasi',
+                                answerKey: 'B',
+                                rubric: 'Analisis tambahan pembayaran berbasis waktu tergolong Riba.',
+                                status: 'Disetujui',
+                                reviewerNotes: 'Soal HOTS kontekstual sangat bagus.'
+                            }
+                        ];
+                    } else { // MTs Default
+                        samples = [
+                            {
+                                id: 103,
+                                elemen: 'Al-Qur\'an Hadis',
+                                cp: 'Menganalisis isi kandungan Al-Qur\'an tentang toleransi dan kelestarian alam',
+                                materi: 'Kepedulian Lingkungan',
+                                indikator: 'Disajikan teks wacana pencemaran sungai, siswa dapat mengaitkan perilaku manusia dengan fenomena kerusakan alam sesuai Surah Ar-Rum: 41.',
+                                cognitiveLevel: 'C4 - Menganalisis',
+                                questionType: 'Pilihan Ganda',
+                                stimulus: 'Banjir bandang menerjang pemukiman akibat alih fungsi hutan menjadi kawasan tambang ilegal di bantaran sungai.',
+                                questionText: 'Berdasarkan fenomena tersebut, analisis manakah yang paling mencerminkan pesan utama QS. Ar-Rum ayat 41?',
+                                optionA: 'Kerusakan alam murni merupakan takdir alam tanpa campur tangan manusia',
+                                optionB: 'Dampak kerusakan diciptakan agar manusia merasakan akibat dari perbuatannya sendiri',
+                                optionC: 'Bencana alam hanya terjadi pada masyarakat yang tidak beriman',
+                                optionD: 'Manusia tidak memiliki kewajiban menjaga alam yang sudah tua',
+                                answerKey: 'B',
+                                rubric: 'Korelasi frasa "Bima kasabat aidinnas" dengan perilaku eksploitatif.',
+                                status: 'Disetujui',
+                                reviewerNotes: 'Konstruksi soal memenuhi kriteria HOTS.'
+                            }
+                        ];
+                    }
+
+                    this.items = [...this.items, ...samples];
+                    this.saveToLocalStorage();
+                    this.showNotification('Contoh soal HOTS berhasil ditambahkan!');
+                },
+
+                downloadPDF() {
+                    const element = document.getElementById('document-render');
+                    const opt = {
+                        margin:       [0.4, 0.4, 0.4, 0.4],
+                        filename:     `Soal_HOTS_${this.teacher.subject}_${this.teacher.level}.pdf`,
+                        image:        { type: 'jpeg', quality: 0.98 },
+                        html2canvas:  { scale: 2 },
+                        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+                    };
+
+                    html2pdf().set(opt).from(element).save();
+                }
+            };
+        }
+    </script>
+</body>
+</html>
