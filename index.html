@@ -340,6 +340,14 @@
                         </h2>
                         <p class="text-xs text-gray-500">Lengkapi naskah soal, stimulus HOTS, kunci jawaban, serta catatan verifikasi Guru Penilai/Validator.</p>
                     </div>
+
+                    <!-- AI BULK GENERATE BUTTON -->
+                    <template x-if="items.length > 0">
+                        <button @click="generateAllSoalWithAI()" :disabled="isBulkGenerating" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-4 py-2 rounded-lg text-xs font-bold shadow transition flex items-center gap-2 disabled:opacity-50">
+                            <i class="fa-solid" :class="isBulkGenerating ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'"></i>
+                            <span x-text="isBulkGenerating ? 'Generasi Seluruh Soal dengan AI...' : '✨ Generate Semua Soal dengan AI'"></span>
+                        </button>
+                    </template>
                 </div>
 
                 <!-- List Draft Soal Items -->
@@ -354,19 +362,27 @@
                                     <span class="text-xs font-semibold px-2.5 py-1 bg-gray-200 text-gray-800 rounded-full" x-text="item.questionType"></span>
                                 </div>
 
-                                <!-- Review Status Badge -->
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-semibold">Status Review:</span>
-                                    <select x-model="item.status" class="text-xs font-bold px-2 py-1 rounded border focus:outline-none"
-                                            :class="{
-                                                'bg-yellow-100 text-yellow-800 border-yellow-300': item.status === 'Draft',
-                                                'bg-green-100 text-green-800 border-green-300': item.status === 'Disetujui',
-                                                'bg-red-100 text-red-800 border-red-300': item.status === 'Revisi'
-                                            }">
-                                        <option value="Draft">🟡 Draft (Belum Diperiksa)</option>
-                                        <option value="Disetujui">🟢 Disetujui (Valid)</option>
-                                        <option value="Revisi">🔴 Perlu Revisi</option>
-                                    </select>
+                                <div class="flex items-center gap-3">
+                                    <!-- INDIVIDUAL AI GENERATE BUTTON -->
+                                    <button @click="generateSoalWithAI(item)" :disabled="generatingItemId === item.id" class="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50">
+                                        <i class="fa-solid" :class="generatingItemId === item.id ? 'fa-spinner fa-spin' : 'fa-wand-magic-sparkles'"></i>
+                                        <span x-text="generatingItemId === item.id ? 'Menggenerasi...' : '✨ Buat Soal Ini dengan AI'"></span>
+                                    </button>
+
+                                    <!-- Review Status Badge -->
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs font-semibold">Status:</span>
+                                        <select x-model="item.status" class="text-xs font-bold px-2 py-1 rounded border focus:outline-none"
+                                                :class="{
+                                                    'bg-yellow-100 text-yellow-800 border-yellow-300': item.status === 'Draft',
+                                                    'bg-green-100 text-green-800 border-green-300': item.status === 'Disetujui',
+                                                    'bg-red-100 text-red-800 border-red-300': item.status === 'Revisi'
+                                                }">
+                                            <option value="Draft">🟡 Draft</option>
+                                            <option value="Disetujui">🟢 Disetujui</option>
+                                            <option value="Revisi">🔴 Revisi</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
@@ -675,6 +691,8 @@
                 notification: { show: false, message: '', type: 'success' },
                 isEditing: false,
                 editingId: null,
+                generatingItemId: null,
+                isBulkGenerating: false,
 
                 // Profile Teacher State
                 teacher: {
@@ -733,6 +751,110 @@
                     if (savedItems) {
                         this.items = JSON.parse(savedItems);
                     }
+                },
+
+                // AI GENERATOR SOAL DENGAN GEMINI API
+                async generateSoalWithAI(item) {
+                    this.generatingItemId = item.id;
+                    this.showNotification('Gemini AI sedang menyusun stimulus dan pertanyaan HOTS...', 'info');
+
+                    const systemPrompt = `Anda adalah pakar pembuat instrumen asesmen dan soal HOTS (Higher Order Thinking Skills) tingkat madrasah (${this.teacher.level}) berstandar Kementerian Agama / Kemendikbudristek.
+Tugas Anda adalah menyusun stimulus kontekstual, pertanyaan bernalar tinggi (C4 Menganalisis / C5 Mengevaluasi / C6 Menciptakan), pilihan jawaban yang logis dan homogen, kunci jawaban, serta rubrik pembahasan.
+Format output HARUS berupa JSON murni sesuai schema yang ditentukan.`;
+
+                    const userPrompt = `Buatkan 1 butir naskah soal HOTS lengkap berdasarkan indikator berikut:
+- Mata Pelajaran: ${this.teacher.subject}
+- Satuan Pendidikan: ${this.teacher.level} (Kelas ${this.teacher.grade})
+- Elemen/Materi: ${item.elemen} / ${item.materi}
+- Capaian Pembelajaran: ${item.cp}
+- Indikator Soal: ${item.indikator}
+- Level Kognitif Target: ${item.cognitiveLevel}
+- Bentuk Soal: ${item.questionType}`;
+
+                    const payload = {
+                        contents: [{ parts: [{ text: userPrompt }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    stimulus: { type: "STRING" },
+                                    questionText: { type: "STRING" },
+                                    optionA: { type: "STRING" },
+                                    optionB: { type: "STRING" },
+                                    optionC: { type: "STRING" },
+                                    optionD: { type: "STRING" },
+                                    optionE: { type: "STRING" },
+                                    answerKey: { type: "STRING" },
+                                    rubric: { type: "STRING" }
+                                },
+                                required: ["stimulus", "questionText", "answerKey", "rubric"]
+                            }
+                        }
+                    };
+
+                    const apiKey = "";
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+                    let attempts = 0;
+                    const maxAttempts = 3;
+                    let success = false;
+
+                    while (attempts < maxAttempts && !success) {
+                        try {
+                            attempts++;
+                            const response = await fetch(apiUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+
+                            if (!response.ok) throw new Error('API Request Failed');
+
+                            const result = await response.json();
+                            const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                            
+                            if (jsonText) {
+                                const parsed = JSON.parse(jsonText);
+                                const index = this.items.findIndex(i => i.id === item.id);
+                                if (index !== -1) {
+                                    this.items[index].stimulus = parsed.stimulus || '';
+                                    this.items[index].questionText = parsed.questionText || '';
+                                    this.items[index].optionA = parsed.optionA || '';
+                                    this.items[index].optionB = parsed.optionB || '';
+                                    this.items[index].optionC = parsed.optionC || '';
+                                    this.items[index].optionD = parsed.optionD || '';
+                                    this.items[index].optionE = parsed.optionE || '';
+                                    this.items[index].answerKey = parsed.answerKey || '';
+                                    this.items[index].rubric = parsed.rubric || '';
+                                    this.items[index].status = 'Draft';
+                                }
+                                this.saveToLocalStorage();
+                                this.showNotification(`Soal berhasil disusun otomatis oleh AI!`);
+                                success = true;
+                            }
+                        } catch (err) {
+                            if (attempts >= maxAttempts) {
+                                this.showNotification('Gagal terhubung ke AI. Silakan coba lagi.', 'warning');
+                            } else {
+                                await new Promise(r => setTimeout(r, Math.pow(2, attempts) * 1000));
+                            }
+                        }
+                    }
+                    this.generatingItemId = null;
+                },
+
+                async generateAllSoalWithAI() {
+                    this.isBulkGenerating = true;
+                    this.showNotification('Memulai pembuatan seluruh naskah soal dengan AI...', 'info');
+
+                    for (const item of this.items) {
+                        await this.generateSoalWithAI(item);
+                    }
+
+                    this.isBulkGenerating = false;
+                    this.showNotification('Seluruh soal kisi-kisi selesai digenerasi oleh AI!', 'success');
                 },
 
                 saveTeacherProfile() {
